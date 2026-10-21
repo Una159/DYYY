@@ -35,12 +35,27 @@ jobs:
         run: |
           echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
+      
       - name: Build package
+        shell: bash
         run: |
-          rm -f packages/*
-          make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          set -euxo pipefail
+
+          rm -f packages/*.deb
+          echo "===== Build standard package ====="
+          make package FINALPACKAGE=1 -j"$(sysctl -n hw.ncpu)"
+
+          echo "===== Build rootless package ====="
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j"$(sysctl -n hw.ncpu)"
+
+          echo "===== Build roothide package ====="
+          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j"$(sysctl -n hw.ncpu)"
+
+          echo "===== Generated packages ====="
+          ls -lah packages/
+          test -n "$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
+
+          
 
       - name: Upload specific Deb packages
         uses: actions/upload-artifact@v4.6.0
