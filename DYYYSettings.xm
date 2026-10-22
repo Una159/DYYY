@@ -15,6 +15,7 @@
 
 #import "DYYYConstants.h"
 #import "DYYYSettingsHelper.h"
+#import "DYYYFeatureTools.h"
 #import "DYYYUtils.h"
 
 @class DYYYIconOptionsDialogView;
@@ -332,6 +333,23 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"detail" : @"-12.5",
             @"cellType" : @26,
             @"imageName" : @"ic_playertime_outlined_20"},
+          @{
+              @"identifier" : @"DYYYEnableProgressAnimation",
+              @"title" : @"启用图片动图进度条",
+              @"subTitle" : @"启用后用指定 GIF 覆盖进度条区域；需填写可读取的 GIF 文件路径",
+              @"detail" : @"",
+              @"cellType" : @37,
+              @"imageName" : @"ic_playertime_outlined_20"
+          },
+          @{
+              @"identifier" : @"DYYYProgressAnimationPath",
+              @"title" : @"进度条 GIF 路径",
+              @"subTitle" : @"填写 GIF 文件绝对路径，例如 /var/mobile/Media/DYYYProgress.gif",
+              @"detail" : @"GIF 文件路径",
+              @"cellType" : @26,
+              @"imageName" : @"ic_playertime_outlined_20"
+          },
+
           @{@"identifier" : @"DYYYHideVideoProgress",
             @"title" : @"隐藏视频进度",
             @"subTitle" : @"隐藏视频进度条",
@@ -416,7 +434,24 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       for (NSDictionary *dict in videoSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
 
-          if ([item.identifier isEqualToString:@"DYYYDefaultSpeed"]) {
+          if ([item.identifier isEqualToString:@"DYYYProgressAnimationPath"]) {
+              NSString *savedPath = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYProgressAnimationPath"];
+              item.detail = savedPath.length ? savedPath : @"GIF 文件路径";
+              item.cellTappedBlock = ^{
+                  NSString *currentPath = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYProgressAnimationPath"] ?: @"";
+                  [DYYYSettingsHelper showTextInputAlert:@"设置进度条 GIF 路径" defaultText:currentPath placeholder:@"填写 GIF 绝对路径" onConfirm:^(NSString *text) {
+                      NSString *path = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+                      if (path.length && ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+                          [DYYYUtils showToast:@"文件不存在，请检查 GIF 路径"];
+                          return;
+                      }
+                      [DYYYSettingsHelper setUserDefaults:path forKey:@"DYYYProgressAnimationPath"];
+                      item.detail = path.length ? path : @"GIF 文件路径";
+                      [item refreshCell];
+                  } onCancel:nil];
+              };
+          }
+          else if ([item.identifier isEqualToString:@"DYYYDefaultSpeed"]) {
               NSString *savedSpeed = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDefaultSpeed"];
               item.detail = savedSpeed ?: @"1.0x";
 
@@ -2043,6 +2078,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"imageName" : @"ic_playbackquaver_outlined"
         },
         @{
+            @"identifier" : @"DYYYCommentVoicePackManager",
+            @"title" : @"评论语音包管理",
+            @"subTitle" : @"导入、播放和管理本地预设语音包音频",
+            @"detail" : @"",
+            @"cellType" : @26,
+            @"imageName" : @"ic_playbackquaver_outlined"
+        },
+        @{
             @"identifier" : @"DYYYForceDownloadEmotion",
             @"title" : @"保存评论区表情包",
             @"subTitle" : @"长按评论或者长按表情包",
@@ -2069,6 +2112,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       for (NSDictionary *dict in downloadSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
+
+          if ([item.identifier isEqualToString:@"DYYYCommentVoicePackManager"]) {
+              item.cellTappedBlock = ^{
+                  UIViewController *presentingVC = topView();
+                  DYYYVoicePackViewController *voiceVC = [[DYYYVoicePackViewController alloc] initWithStyle:UITableViewStyleInsetGrouped];
+                  [presentingVC.navigationController pushViewController:voiceVC animated:YES];
+              };
+          }
 
           // 特殊处理接口解析保存媒体选项
           if ([item.identifier isEqualToString:@"DYYYInterfaceDownload"]) {
@@ -3614,6 +3665,8 @@ speedSettingsItem.detail = trimmedText;
                                 onConfirm:nil];
     };
     [aboutItems addObject:licenseItem];
+
+
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 
@@ -3622,6 +3675,48 @@ speedSettingsItem.detail = trimmedText;
     [rootVC.navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
 }
 
+%hook AWESettingsViewModel
+- (NSArray *)sectionDataArray {
+    NSArray *originalSections = %orig;
+    BOOL sectionExists = NO;
+    BOOL isMainSettingsPage = NO;
 
+    // 遍历检查是否已存在DYYY部分
+    for (AWESettingSectionModel *section in originalSections) {
+        if ([section.sectionHeaderTitle isEqualToString:DYYY_NAME]) {
+            sectionExists = YES;
+        }
+        if ([section.sectionHeaderTitle isEqualToString:@"账号"]) {
+            isMainSettingsPage = YES;
+        }
+    }
 
+    if (isMainSettingsPage && !sectionExists) {
+        AWESettingItemModel *dyyyItem = [[%c(AWESettingItemModel) alloc] init];
+        dyyyItem.identifier = DYYY_NAME;
+        dyyyItem.title = DYYY_NAME;
+        dyyyItem.detail = DYYY_VERSION;
+        dyyyItem.type = 0;
+        dyyyItem.svgIconImageName = @"ic_sapling_outlined";
+        dyyyItem.cellType = 26;
+        dyyyItem.colorStyle = 2;
+        dyyyItem.isEnable = YES;
+        dyyyItem.cellTappedBlock = ^{
+          UIViewController *rootVC = self.controllerDelegate;
+          BOOL hasAgreed = [DYYYSettingsHelper getUserDefaults:@"DYYYUserAgreementAccepted"];
+          showDYYYSettingsVC(rootVC, hasAgreed);
+        };
 
+        AWESettingSectionModel *newSection = [[%c(AWESettingSectionModel) alloc] init];
+        newSection.itemArray = @[ dyyyItem ];
+        newSection.type = 0;
+        newSection.sectionHeaderHeight = 40;
+        newSection.sectionHeaderTitle = @"DYYY";
+
+        NSMutableArray *newSections = [NSMutableArray arrayWithArray:originalSections];
+        [newSections insertObject:newSection atIndex:0];
+        return newSections;
+    }
+    return originalSections;
+}
+%end
