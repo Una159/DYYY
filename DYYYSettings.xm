@@ -3621,9 +3621,7 @@ speedSettingsItem.detail = trimmedText;
     objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [rootVC.navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
 }
-#import "AwemeHeaders.h"
-#import "DYYYConstants.h"
-#import "DYYYSettingsHelper.h"
 
-extern void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed);
+
+
 
