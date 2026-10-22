@@ -6,6 +6,7 @@
 //  Created on: 2024/10/04
 //
 #import <QuartzCore/QuartzCore.h>
+#import <ImageIO/ImageIO.h>
 #import <UIKit/UIKit.h>
 #import <float.h>
 #import <math.h>
@@ -25,6 +26,7 @@
 #import "DYYYSettingViewController.h"
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
+#import "DYYYFeatureTools.h"
 
 static CGFloat gStartY = 0.0;
 static CGFloat gStartVal = 0.0;
@@ -1336,6 +1338,37 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
 %end
 
 %hook AWEFeedProgressSlider
+
+- (void)layoutSubviews {
+    %orig;
+    static NSInteger const kDYYYGIFOverlayTag = 927441;
+    UIImageView *overlay = (UIImageView *)[self viewWithTag:kDYYYGIFOverlayTag];
+    BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableProgressAnimation"];
+    NSString *path = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYProgressAnimationPath"];
+    if (!enabled || path.length == 0 || ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        [overlay removeFromSuperview];
+        return;
+    }
+    if (!overlay || ![overlay isKindOfClass:[UIImageView class]]) {
+        [overlay removeFromSuperview];
+        overlay = [[UIImageView alloc] initWithFrame:self.bounds];
+        overlay.tag = kDYYYGIFOverlayTag;
+        overlay.contentMode = UIViewContentModeScaleToFill;
+        overlay.userInteractionEnabled = NO;
+        overlay.clipsToBounds = YES;
+        [self addSubview:overlay];
+    }
+    overlay.frame = self.bounds;
+    NSString *cachedPath = objc_getAssociatedObject(overlay, @selector(layoutSubviews));
+    if (![cachedPath isEqualToString:path] || !overlay.image) {
+        UIImage *gifImage = DYYYAnimatedImageFromGIFPath(path);
+        overlay.image = gifImage;
+        if (gifImage.images.count > 1) [overlay startAnimating];
+        else [overlay stopAnimating];
+        objc_setAssociatedObject(overlay, @selector(layoutSubviews), path, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    }
+    [self bringSubviewToFront:overlay];
+}
 
 - (void)setAlpha:(CGFloat)alpha {
     if (DYYYGetBool(@"DYYYShowScheduleDisplay")) {
@@ -8938,7 +8971,25 @@ static void findTargetViewInView(UIView *view) {
     }
 }
 
+static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
+    Class audioUploadClass = objc_getClass("AWECommentAudioUploadManager");
+    if (audioUploadClass) {
+        %init(DYYYVoicePackReplacementHook, AWECommentAudioUploadManager = audioUploadClass);
+        NSLog(@"[DYYY] Voice-pack upload hook installed (attempt %lu)", (unsigned long)attempt);
+        return;
+    }
+    // 抖音评论模块可能在 tweak ctor 之后才加载；启动时只查一次会导致 Hook 永远不生效。
+    if (attempt < 30) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            DYYYTryInstallVoicePackHook(attempt + 1);
+        });
+    } else {
+        NSLog(@"[DYYY] Voice-pack upload class not found after 30 seconds");
+    }
+}
+
 %ctor {
+    DYYYTryInstallVoicePackHook(0);
     Class interactionBaseLabelClass = objc_getClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
@@ -9033,3 +9084,34 @@ static void findTargetViewInView(UIView *view) {
                                                     }];
     }
 }
+
+
+// 本地评论语音包替换：参考 AWECommentAudioTweak 中的 AWECommentAudioUploadManager 上传入口。
+// 仅当本地语音包路径有效时替换上传文件路径；不修改评论文本、账号或其他请求参数。
+static NSString *DYYYVoicePackReplacementPath(NSString *originalPath) {
+    NSURL *selectedURL = DYYYSelectedVoicePackURL();
+    if (!selectedURL.isFileURL || selectedURL.path.length == 0) return originalPath;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:selectedURL.path]) return originalPath;
+    return selectedURL.path;
+}
+
+%group DYYYVoicePackReplacementHook
+%hook AWECommentAudioUploadManager
+
+- (void)startUploadAudioWithFilePath:(NSString *)filePath {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath);
+}
+
+- (void)uploadAudioWithFilePath:(NSString *)filePath completion:(id)completion {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath, completion);
+}
+
+- (void)uploadAudioWithFilePath:(NSString *)filePath authCompletion:(id)authCompletion completion:(id)completion {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath, authCompletion, completion);
+}
+
+%end
+%end

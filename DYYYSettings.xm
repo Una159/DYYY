@@ -336,7 +336,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           @{
               @"identifier" : @"DYYYEnableProgressAnimation",
               @"title" : @"启用图片动图进度条",
-              @"subTitle" : @"启用后用指定 GIF 覆盖进度条区域；需填写可读取的 GIF 文件路径",
+              @"subTitle" : @"启用后使用从系统文件选择器导入的 GIF 覆盖进度条区域",
               @"detail" : @"",
               @"cellType" : @37,
               @"imageName" : @"ic_playertime_outlined_20"
@@ -344,7 +344,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           @{
               @"identifier" : @"DYYYProgressAnimationPath",
               @"title" : @"进度条 GIF 路径",
-              @"subTitle" : @"填写 GIF 文件绝对路径，例如 /var/mobile/Media/DYYYProgress.gif",
+              @"subTitle" : @"点击选择 GIF 文件；自动复制到插件可访问的本地目录",
               @"detail" : @"GIF 文件路径",
               @"cellType" : @26,
               @"imageName" : @"ic_playertime_outlined_20"
@@ -436,19 +436,17 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
           if ([item.identifier isEqualToString:@"DYYYProgressAnimationPath"]) {
               NSString *savedPath = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYProgressAnimationPath"];
-              item.detail = savedPath.length ? savedPath : @"GIF 文件路径";
+              item.detail = savedPath.length ? [savedPath lastPathComponent] : @"点击选择 GIF";
               item.cellTappedBlock = ^{
-                  NSString *currentPath = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYProgressAnimationPath"] ?: @"";
-                  [DYYYSettingsHelper showTextInputAlert:@"设置进度条 GIF 路径" defaultText:currentPath placeholder:@"填写 GIF 绝对路径" onConfirm:^(NSString *text) {
-                      NSString *path = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-                      if (path.length && ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-                          [DYYYUtils showToast:@"文件不存在，请检查 GIF 路径"];
-                          return;
+                  DYYYPresentProgressGIFPicker(topView(), ^(NSString *savedPath) {
+                      if (savedPath.length) {
+                          item.detail = [savedPath lastPathComponent];
+                          [DYYYUtils showToast:@"GIF 已导入"];
+                      } else {
+                          [DYYYUtils showToast:@"未选择 GIF 或导入失败"];
                       }
-                      [DYYYSettingsHelper setUserDefaults:path forKey:@"DYYYProgressAnimationPath"];
-                      item.detail = path.length ? path : @"GIF 文件路径";
                       [item refreshCell];
-                  } onCancel:nil];
+                  });
               };
           }
           else if ([item.identifier isEqualToString:@"DYYYDefaultSpeed"]) {

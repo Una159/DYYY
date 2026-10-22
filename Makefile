@@ -11,6 +11,9 @@
 TARGET = iphone:clang:latest:14.0
 ARCHS = arm64 arm64e
 
+# 明确覆盖 Theos 实际生成 Debian 包使用的版本号
+THEOS_PACKAGE_BASE_VERSION = 3.0
+
 #export THEOS=/Users/huami/theos
 #export THEOS_PACKAGE_SCHEME=roothide
 
