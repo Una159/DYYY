@@ -8971,6 +8971,36 @@ static void findTargetViewInView(UIView *view) {
     }
 }
 
+// 本地评论语音包替换：参考 AWECommentAudioTweak 中的 AWECommentAudioUploadManager 上传入口。
+// 仅当本地语音包路径有效时替换上传文件路径；不修改评论文本、账号或其他请求参数。
+static NSString *DYYYVoicePackReplacementPath(NSString *originalPath) {
+    NSURL *selectedURL = DYYYSelectedVoicePackURL();
+    if (!selectedURL.isFileURL || selectedURL.path.length == 0) return originalPath;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:selectedURL.path]) return originalPath;
+    return selectedURL.path;
+}
+
+%group DYYYVoicePackReplacementHook
+%hook AWECommentAudioUploadManager
+
+- (void)startUploadAudioWithFilePath:(NSString *)filePath {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath);
+}
+
+- (void)uploadAudioWithFilePath:(NSString *)filePath completion:(id)completion {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath, completion);
+}
+
+- (void)uploadAudioWithFilePath:(NSString *)filePath authCompletion:(id)authCompletion completion:(id)completion {
+    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
+    %orig(replacementPath ?: filePath, authCompletion, completion);
+}
+
+%end
+%end
+
 static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
     Class audioUploadClass = objc_getClass("AWECommentAudioUploadManager");
     if (audioUploadClass) {
@@ -9086,32 +9116,4 @@ static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
 }
 
 
-// 本地评论语音包替换：参考 AWECommentAudioTweak 中的 AWECommentAudioUploadManager 上传入口。
-// 仅当本地语音包路径有效时替换上传文件路径；不修改评论文本、账号或其他请求参数。
-static NSString *DYYYVoicePackReplacementPath(NSString *originalPath) {
-    NSURL *selectedURL = DYYYSelectedVoicePackURL();
-    if (!selectedURL.isFileURL || selectedURL.path.length == 0) return originalPath;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:selectedURL.path]) return originalPath;
-    return selectedURL.path;
-}
 
-%group DYYYVoicePackReplacementHook
-%hook AWECommentAudioUploadManager
-
-- (void)startUploadAudioWithFilePath:(NSString *)filePath {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath);
-}
-
-- (void)uploadAudioWithFilePath:(NSString *)filePath completion:(id)completion {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath, completion);
-}
-
-- (void)uploadAudioWithFilePath:(NSString *)filePath authCompletion:(id)authCompletion completion:(id)completion {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath, authCompletion, completion);
-}
-
-%end
-%end
