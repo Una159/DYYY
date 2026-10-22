@@ -145,7 +145,8 @@ void DYYYPresentProgressGIFPicker(UIViewController *presentingViewController, vo
     UIDocumentPickerViewController *picker = nil;
     if (@available(iOS 14.0, *)) {
         UTType *gifType = [UTType typeWithFilenameExtension:@"gif"];
-        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:(gifType ? @[gifType] : @[UTType.data]) asCopy:YES];
+        if (!gifType) gifType = [UTType typeWithIdentifier:@"public.data"];
+        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:(gifType ? @[gifType] : @[]) asCopy:YES];
     } else {
         picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"com.compuserve.gif"] inMode:UIDocumentPickerModeImport];
     }
