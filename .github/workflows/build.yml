@@ -41,6 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+           brew install dpkg
           mkdir -p artifacts/debs artifacts/dylibs
           find packages -maxdepth 1 -name '*.deb' -exec cp {} artifacts/debs/ \;
           for deb in packages/*.deb; do
