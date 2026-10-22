@@ -224,7 +224,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     if (!hasAgreed) {
         [DYYYSettingsHelper showAboutDialog:@"用户协议"
                                     message:@"本插件为开源项目\n仅供学习交流用途\n如有侵权请联系, GitHub 仓库：huami1314/DYYY\n请遵守当地法律法规, "
-                                            @"逆向工程仅为学习目的\n盗用源码进行商业用途/发布但未标记开源项目必究\n详情请参阅项目内 MIT 许可证\n\n请输入\"我已阅读并同意继续使用\"以继续"
+                                            @"逆向工程仅为学习目的\n盗用源码进行商业用途/发布但未标记开源项目必究\n详情请参阅项目内 MIT 许可证\n\n请输入"我已阅读并同意继续使用"以继续"
                                   onConfirm:^{
                                     [DYYYSettingsHelper showUserAgreementAlert];
                                   }];
@@ -2015,7 +2015,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"title" : @"长按定时关闭抖音",
             @"detail" : @"",
             @"cellType" : @6,
-            @"imageName" : @"ic_c_alarm_outlined"}
+            @"imageName" : @"ic_c_alarm_outlined"},
+          @{ @"identifier" : @"DYYYLongPressVoiceFavorites",
+            @"title" : @"长按面板音频助手",
+            @"subTitle" : @"管理收藏音频和本地语音工具",
+            @"detail" : @"",
+            @"cellType" : @6,
+            @"imageName" : @"ic_playbackquaver_outlined"}
       ];
 
       for (NSDictionary *dict in longPressSettings) {
@@ -2914,7 +2920,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                       @"detail" : @"",
                       @"cellType" : @6,
                       @"imageName" : @"ic_share_outlined"},
-                ];
+                @{"identifier" : @"DYYYLongPressVoiceFavorites",
+            @"title" : @"长按面板音频助手",
+            @"subTitle" : @"管理收藏音频和本地语音工具",
+            @"detail" : @"",
+            @"cellType" : @6,
+            @"imageName" : @"ic_playbackquaver_outlined"},
+          ];
 
                 for (NSDictionary *dict in doubleTapFunctions) {
                     AWESettingItemModel *functionItem = [DYYYSettingsHelper createSettingItem:dict];
@@ -3646,14 +3658,14 @@ speedSettingsItem.detail = trimmedText;
       [DYYYSettingsHelper showAboutDialog:@"MIT License"
                                   message:@"Copyright (c) 2024 huami.\n\n"
                                           @"Permission is hereby granted, free of charge, to any person obtaining a copy "
-                                          @"of this software and associated documentation files (the \"Software\"), to deal "
+                                          @"of this software and associated documentation files (the "Software"), to deal "
                                           @"in the Software without restriction, including without limitation the rights "
                                           @"to use, copy, modify, merge, publish, distribute, sublicense, and/or sell "
                                           @"copies of the Software, and to permit persons to whom the Software is "
                                           @"furnished to do so, subject to the following conditions:\n\n"
                                           @"The above copyright notice and this permission notice shall be included in all "
                                           @"copies or substantial portions of the Software.\n\n"
-                                          @"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR "
+                                          @"THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR "
                                           @"IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, "
                                           @"FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE "
                                           @"AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER "

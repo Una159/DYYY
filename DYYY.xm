@@ -1337,6 +1337,13 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
 
 %end
 
+static void DYYYRecordProgressForGIF(UIView *slider, CGFloat currentTime, CGFloat totalDuration) {
+    if (!slider) return;
+    objc_setAssociatedObject(slider, @selector(dyyy_progressCurrentTime), @(MAX(0.0, currentTime)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(slider, @selector(dyyy_progressTotalDuration), @(MAX(0.0, totalDuration)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [slider setNeedsLayout];
+}
+
 %hook AWEFeedProgressSlider
 
 - (void)layoutSubviews {
@@ -1351,21 +1358,34 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
     }
     if (!overlay || ![overlay isKindOfClass:[UIImageView class]]) {
         [overlay removeFromSuperview];
-        overlay = [[UIImageView alloc] initWithFrame:self.bounds];
+        overlay = [[UIImageView alloc] initWithFrame:CGRectZero];
         overlay.tag = kDYYYGIFOverlayTag;
-        overlay.contentMode = UIViewContentModeScaleToFill;
+        overlay.contentMode = UIViewContentModeScaleAspectFit;
         overlay.userInteractionEnabled = NO;
         overlay.clipsToBounds = YES;
         [self addSubview:overlay];
     }
-    overlay.frame = self.bounds;
+    CGFloat edge = MIN(24.0, MAX(12.0, CGRectGetHeight(self.bounds) * 1.8));
+    overlay.bounds = CGRectMake(0, 0, edge, edge);
+    overlay.center = CGPointMake(MAX(edge / 2.0, CGRectGetWidth(self.bounds) - edge / 2.0), CGRectGetMidY(self.bounds));
     NSString *cachedPath = objc_getAssociatedObject(overlay, @selector(layoutSubviews));
     if (![cachedPath isEqualToString:path] || !overlay.image) {
+        [overlay stopAnimating];
         UIImage *gifImage = DYYYAnimatedImageFromGIFPath(path);
         overlay.image = gifImage;
-        if (gifImage.images.count > 1) [overlay startAnimating];
-        else [overlay stopAnimating];
+        if (gifImage.images.count > 1) overlay.animationImages = gifImage.images;
+        else overlay.animationImages = nil;
         objc_setAssociatedObject(overlay, @selector(layoutSubviews), path, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    }
+    NSNumber *progress = objc_getAssociatedObject(self, @selector(dyyy_progressCurrentTime));
+    NSNumber *duration = objc_getAssociatedObject(self, @selector(dyyy_progressTotalDuration));
+    CGFloat fraction = (duration.doubleValue > 0.0) ? progress.doubleValue / duration.doubleValue : 0.0;
+    BOOL isEnd = (fraction >= 0.985 && fraction <= 1.05);
+    overlay.hidden = !isEnd;
+    if (isEnd && overlay.animationImages.count > 1) {
+        if (!overlay.isAnimating) [overlay startAnimating];
+    } else {
+        [overlay stopAnimating];
     }
     [self bringSubviewToFront:overlay];
 }
@@ -1775,6 +1795,8 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
 - (void)updateProgressSliderWithTime:(CGFloat)arg1 totalDuration:(CGFloat)arg2 {
     %orig;
     [self dyyy_syncScheduleLabelsWithCurrentTime:arg1 totalDuration:arg2];
+    id progressSlider = self.progressSlider;
+    if ([progressSlider isKindOfClass:[UIView class]]) DYYYRecordProgressForGIF((UIView *)progressSlider, arg1, arg2);
 }
 
 %end
@@ -1805,6 +1827,8 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
 - (void)updateProgressSliderWithTime:(CGFloat)arg1 totalDuration:(CGFloat)arg2 {
     %orig;
     [self dyyy_syncScheduleLabelsWithCurrentTime:arg1 totalDuration:arg2];
+    id progressSlider = self.progressSlider;
+    if ([progressSlider isKindOfClass:[UIView class]]) DYYYRecordProgressForGIF((UIView *)progressSlider, arg1, arg2);
 }
 
 %end
@@ -9004,8 +9028,25 @@ static NSString *DYYYVoicePackReplacementPath(NSString *originalPath) {
 static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
     Class audioUploadClass = objc_getClass("AWECommentAudioUploadManager");
     if (audioUploadClass) {
+        // 诊断真实运行时是否存在当前 Logos Hook 使用的上传 selector。
+        // 仅记录结果，不调用私有方法，也不改变原始上传参数。
+        SEL selectors[] = {
+            NSSelectorFromString(@"startUploadAudioWithFilePath:"),
+            NSSelectorFromString(@"uploadAudioWithFilePath:completion:"),
+            NSSelectorFromString(@"uploadAudioWithFilePath:authCompletion:completion:")
+        };
+        const char *selectorNames[] = {
+            "startUploadAudioWithFilePath:",
+            "uploadAudioWithFilePath:completion:",
+            "uploadAudioWithFilePath:authCompletion:completion:"
+        };
+        for (NSUInteger i = 0; i < sizeof(selectors) / sizeof(selectors[0]); i++) {
+            Method method = class_getInstanceMethod(audioUploadClass, selectors[i]);
+            NSLog(@"[DYYY][VoicePackDiag] %@ %@ => %@", NSStringFromClass(audioUploadClass),
+                  [NSString stringWithUTF8String:selectorNames[i]], method ? @"FOUND" : @"MISSING");
+        }
         %init(DYYYVoicePackReplacementHook, AWECommentAudioUploadManager = audioUploadClass);
-        NSLog(@"[DYYY] Voice-pack upload hook installed (attempt %lu)", (unsigned long)attempt);
+        NSLog(@"[DYYY] Voice-pack upload hook initialized (attempt %lu); selector diagnostics above", (unsigned long)attempt);
         return;
     }
     // 抖音评论模块可能在 tweak ctor 之后才加载；启动时只查一次会导致 Hook 永远不生效。
