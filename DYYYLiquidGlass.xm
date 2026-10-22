@@ -105,7 +105,7 @@ static void DYYYUpdateShimmer(UIView *bar) {
         shimmer.startPoint = CGPointMake(0, 0.5);
         shimmer.endPoint = CGPointMake(1, 0.5);
         shimmer.locations = @[@-0.3, @-0.15, @0];
-        shimmer.userInteractionEnabled = NO;
+        
 
         CABasicAnimation *a = [CABasicAnimation animationWithKeyPath:@"locations"];
         a.toValue = @[@1, @1.15, @1.3];
