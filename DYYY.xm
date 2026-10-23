@@ -1337,14 +1337,43 @@ static BOOL DYYYShouldHandleSpeedFeatures(void) {
 
 %end
 
-static void DYYYRecordProgressForGIF(UIView *slider, CGFloat currentTime, CGFloat totalDuration) {
-    if (!slider) return;
-    objc_setAssociatedObject(slider, @selector(dyyy_progressCurrentTime), @(MAX(0.0, currentTime)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(slider, @selector(dyyy_progressTotalDuration), @(MAX(0.0, totalDuration)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [slider setNeedsLayout];
+%hook AWEFeedProgressSlider
+
+%new
+- (void)dyyy_updateProgressGIFWithCurrentTime:(CGFloat)currentTime totalDuration:(CGFloat)totalDuration {
+    objc_setAssociatedObject(self, @selector(dyyy_updateProgressGIFWithCurrentTime:totalDuration:),
+                             @{ @"currentTime": @(MAX(0, currentTime)), @"duration": @(MAX(0, totalDuration)) },
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self setNeedsLayout];
 }
 
-%hook AWEFeedProgressSlider
+// Update the GIF position from manual slider touches as well as playback callbacks.
+%new
+- (void)dyyy_updateProgressGIFFromTouch:(NSSet<UITouch *> *)touches {
+    UITouch *touch = touches.anyObject;
+    if (!touch || CGRectGetWidth(self.bounds) <= 0) return;
+    NSDictionary *progress = objc_getAssociatedObject(self, @selector(dyyy_updateProgressGIFWithCurrentTime:totalDuration:));
+    CGFloat duration = [progress[@"duration"] doubleValue];
+    if (duration <= 0) return;
+    CGPoint point = [touch locationInView:self];
+    CGFloat fraction = MIN(1.0, MAX(0.0, point.x / CGRectGetWidth(self.bounds)));
+    [self dyyy_updateProgressGIFWithCurrentTime:(fraction * duration) totalDuration:duration];
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    [self dyyy_updateProgressGIFFromTouch:touches];
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    [self dyyy_updateProgressGIFFromTouch:touches];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    [self dyyy_updateProgressGIFFromTouch:touches];
+}
 
 - (void)layoutSubviews {
     %orig;
@@ -1362,31 +1391,28 @@ static void DYYYRecordProgressForGIF(UIView *slider, CGFloat currentTime, CGFloa
         overlay.tag = kDYYYGIFOverlayTag;
         overlay.contentMode = UIViewContentModeScaleAspectFit;
         overlay.userInteractionEnabled = NO;
-        overlay.clipsToBounds = YES;
+        overlay.clipsToBounds = NO;
         [self addSubview:overlay];
     }
-    CGFloat edge = MIN(24.0, MAX(12.0, CGRectGetHeight(self.bounds) * 1.8));
-    overlay.bounds = CGRectMake(0, 0, edge, edge);
-    overlay.center = CGPointMake(MAX(edge / 2.0, CGRectGetWidth(self.bounds) - edge / 2.0), CGRectGetMidY(self.bounds));
     NSString *cachedPath = objc_getAssociatedObject(overlay, @selector(layoutSubviews));
     if (![cachedPath isEqualToString:path] || !overlay.image) {
-        [overlay stopAnimating];
         UIImage *gifImage = DYYYAnimatedImageFromGIFPath(path);
         overlay.image = gifImage;
-        if (gifImage.images.count > 1) overlay.animationImages = gifImage.images;
-        else overlay.animationImages = nil;
+        if (gifImage.images.count > 1) [overlay startAnimating];
+        else [overlay stopAnimating];
         objc_setAssociatedObject(overlay, @selector(layoutSubviews), path, OBJC_ASSOCIATION_COPY_NONATOMIC);
     }
-    NSNumber *progress = objc_getAssociatedObject(self, @selector(dyyy_progressCurrentTime));
-    NSNumber *duration = objc_getAssociatedObject(self, @selector(dyyy_progressTotalDuration));
-    CGFloat fraction = (duration.doubleValue > 0.0) ? progress.doubleValue / duration.doubleValue : 0.0;
-    BOOL isEnd = (fraction >= 0.985 && fraction <= 1.05);
-    overlay.hidden = !isEnd;
-    if (isEnd && overlay.animationImages.count > 1) {
-        if (!overlay.isAnimating) [overlay startAnimating];
-    } else {
-        [overlay stopAnimating];
-    }
+    NSDictionary *progress = objc_getAssociatedObject(self, @selector(dyyy_updateProgressGIFWithCurrentTime:totalDuration:));
+    CGFloat currentTime = [progress[@"currentTime"] doubleValue];
+    CGFloat duration = [progress[@"duration"] doubleValue];
+    CGFloat fraction = duration > 0 ? MIN(1.0, MAX(0.0, currentTime / duration)) : 0.0;
+    CGFloat trackWidth = CGRectGetWidth(self.bounds);
+    CGFloat imageWidth = MIN(30.0, MAX(18.0, CGRectGetHeight(self.bounds) * 2.2));
+    CGFloat imageHeight = MIN(30.0, MAX(18.0, CGRectGetHeight(self.bounds) * 2.2));
+    CGFloat centerX = fraction * trackWidth;
+    centerX = MIN(MAX(centerX, imageWidth / 2.0), MAX(imageWidth / 2.0, trackWidth - imageWidth / 2.0));
+    overlay.bounds = CGRectMake(0, 0, imageWidth, imageHeight);
+    overlay.center = CGPointMake(centerX, CGRectGetMidY(self.bounds));
     [self bringSubviewToFront:overlay];
 }
 
@@ -1795,8 +1821,10 @@ static void DYYYRecordProgressForGIF(UIView *slider, CGFloat currentTime, CGFloa
 - (void)updateProgressSliderWithTime:(CGFloat)arg1 totalDuration:(CGFloat)arg2 {
     %orig;
     [self dyyy_syncScheduleLabelsWithCurrentTime:arg1 totalDuration:arg2];
-    id progressSlider = self.progressSlider;
-    if ([progressSlider isKindOfClass:[UIView class]]) DYYYRecordProgressForGIF((UIView *)progressSlider, arg1, arg2);
+    id slider = self.progressSlider;
+    if ([slider respondsToSelector:@selector(dyyy_updateProgressGIFWithCurrentTime:totalDuration:)]) {
+        [slider dyyy_updateProgressGIFWithCurrentTime:arg1 totalDuration:arg2];
+    }
 }
 
 %end
@@ -1827,8 +1855,10 @@ static void DYYYRecordProgressForGIF(UIView *slider, CGFloat currentTime, CGFloa
 - (void)updateProgressSliderWithTime:(CGFloat)arg1 totalDuration:(CGFloat)arg2 {
     %orig;
     [self dyyy_syncScheduleLabelsWithCurrentTime:arg1 totalDuration:arg2];
-    id progressSlider = self.progressSlider;
-    if ([progressSlider isKindOfClass:[UIView class]]) DYYYRecordProgressForGIF((UIView *)progressSlider, arg1, arg2);
+    id slider = self.progressSlider;
+    if ([slider respondsToSelector:@selector(dyyy_updateProgressGIFWithCurrentTime:totalDuration:)]) {
+        [slider dyyy_updateProgressGIFWithCurrentTime:arg1 totalDuration:arg2];
+    }
 }
 
 %end
@@ -8995,72 +9025,7 @@ static void findTargetViewInView(UIView *view) {
     }
 }
 
-// 本地评论语音包替换：参考 AWECommentAudioTweak 中的 AWECommentAudioUploadManager 上传入口。
-// 仅当本地语音包路径有效时替换上传文件路径；不修改评论文本、账号或其他请求参数。
-static NSString *DYYYVoicePackReplacementPath(NSString *originalPath) {
-    NSURL *selectedURL = DYYYSelectedVoicePackURL();
-    if (!selectedURL.isFileURL || selectedURL.path.length == 0) return originalPath;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:selectedURL.path]) return originalPath;
-    return selectedURL.path;
-}
-
-%group DYYYVoicePackReplacementHook
-%hook AWECommentAudioUploadManager
-
-- (void)startUploadAudioWithFilePath:(NSString *)filePath {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath);
-}
-
-- (void)uploadAudioWithFilePath:(NSString *)filePath completion:(id)completion {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath, completion);
-}
-
-- (void)uploadAudioWithFilePath:(NSString *)filePath authCompletion:(id)authCompletion completion:(id)completion {
-    NSString *replacementPath = DYYYVoicePackReplacementPath(filePath);
-    %orig(replacementPath ?: filePath, authCompletion, completion);
-}
-
-%end
-%end
-
-static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
-    Class audioUploadClass = objc_getClass("AWECommentAudioUploadManager");
-    if (audioUploadClass) {
-        // 诊断真实运行时是否存在当前 Logos Hook 使用的上传 selector。
-        // 仅记录结果，不调用私有方法，也不改变原始上传参数。
-        SEL selectors[] = {
-            NSSelectorFromString(@"startUploadAudioWithFilePath:"),
-            NSSelectorFromString(@"uploadAudioWithFilePath:completion:"),
-            NSSelectorFromString(@"uploadAudioWithFilePath:authCompletion:completion:")
-        };
-        const char *selectorNames[] = {
-            "startUploadAudioWithFilePath:",
-            "uploadAudioWithFilePath:completion:",
-            "uploadAudioWithFilePath:authCompletion:completion:"
-        };
-        for (NSUInteger i = 0; i < sizeof(selectors) / sizeof(selectors[0]); i++) {
-            Method method = class_getInstanceMethod(audioUploadClass, selectors[i]);
-            NSLog(@"[DYYY][VoicePackDiag] %@ %@ => %@", NSStringFromClass(audioUploadClass),
-                  [NSString stringWithUTF8String:selectorNames[i]], method ? @"FOUND" : @"MISSING");
-        }
-        %init(DYYYVoicePackReplacementHook, AWECommentAudioUploadManager = audioUploadClass);
-        NSLog(@"[DYYY] Voice-pack upload hook initialized (attempt %lu); selector diagnostics above", (unsigned long)attempt);
-        return;
-    }
-    // 抖音评论模块可能在 tweak ctor 之后才加载；启动时只查一次会导致 Hook 永远不生效。
-    if (attempt < 30) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            DYYYTryInstallVoicePackHook(attempt + 1);
-        });
-    } else {
-        NSLog(@"[DYYY] Voice-pack upload class not found after 30 seconds");
-    }
-}
-
 %ctor {
-    DYYYTryInstallVoicePackHook(0);
     Class interactionBaseLabelClass = objc_getClass("AWECommentSwiftBizUI.CommentInteractionBaseLabel");
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
@@ -9155,6 +9120,3 @@ static void DYYYTryInstallVoicePackHook(NSUInteger attempt) {
                                                     }];
     }
 }
-
-
-

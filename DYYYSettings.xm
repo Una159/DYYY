@@ -2082,14 +2082,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"imageName" : @"ic_playbackquaver_outlined"
         },
         @{
-            @"identifier" : @"DYYYCommentVoicePackManager",
-            @"title" : @"评论语音包管理",
-            @"subTitle" : @"导入、播放和管理本地预设语音包音频",
-            @"detail" : @"",
-            @"cellType" : @26,
-            @"imageName" : @"ic_playbackquaver_outlined"
-        },
-        @{
             @"identifier" : @"DYYYForceDownloadEmotion",
             @"title" : @"保存评论区表情包",
             @"subTitle" : @"长按评论或者长按表情包",
@@ -2116,14 +2108,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       for (NSDictionary *dict in downloadSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
-
-          if ([item.identifier isEqualToString:@"DYYYCommentVoicePackManager"]) {
-              item.cellTappedBlock = ^{
-                  UIViewController *presentingVC = topView();
-                  DYYYVoicePackViewController *voiceVC = [[DYYYVoicePackViewController alloc] initWithStyle:UITableViewStyleInsetGrouped];
-                  [presentingVC.navigationController pushViewController:voiceVC animated:YES];
-              };
-          }
 
           // 特殊处理接口解析保存媒体选项
           if ([item.identifier isEqualToString:@"DYYYInterfaceDownload"]) {
@@ -2920,12 +2904,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                       @"detail" : @"",
                       @"cellType" : @6,
                       @"imageName" : @"ic_share_outlined"},
-                @{@"identifier" : @"DYYYLongPressVoiceFavorites",
-            @"title" : @"长按面板音频助手",
-            @"subTitle" : @"管理收藏音频和本地语音工具",
-            @"detail" : @"",
-            @"cellType" : @6,
-            @"imageName" : @"ic_playbackquaver_outlined"},
+
           ];
 
                 for (NSDictionary *dict in doubleTapFunctions) {

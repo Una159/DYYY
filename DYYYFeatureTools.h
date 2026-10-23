@@ -1,21 +1,11 @@
 #import <UIKit/UIKit.h>
 
-@interface DYYYVoicePackViewController : UITableViewController
-@end
+NS_ASSUME_NONNULL_BEGIN
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/// Presents the system Files picker and stores the selected GIF in the tweak-accessible Documents/DYYY directory.
+/// Present the system file picker and copy a selected GIF into DYYY's Documents/DYYY directory.
 void DYYYPresentProgressGIFPicker(UIViewController *presentingViewController, void (^completion)(NSString * _Nullable savedPath));
 
-/// Returns the locally selected voice-pack audio file, if one has been selected.
-NSURL * _Nullable DYYYSelectedVoicePackURL(void);
-
-/// Creates an animated UIImage from a GIF file on disk.
+/// Decode a local GIF into an animated UIImage suitable for UIImageView animation.
 UIImage * _Nullable DYYYAnimatedImageFromGIFPath(NSString *path);
 
-#ifdef __cplusplus
-}
-#endif
+NS_ASSUME_NONNULL_END
